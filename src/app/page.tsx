@@ -7,6 +7,7 @@ interface FileItem {
   original: File;
   newBaseName: string;
   extension: string;
+  receiverName: string;
 }
 
 function getExtension(filename: string): string {
@@ -23,16 +24,40 @@ export default function Home() {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = (now.getMonth() + 1).toString().padStart(2, "0");
+  const currentDay = now.getDate().toString().padStart(2, "0");
 
   const [files, setFiles] = useState<FileItem[]>([]);
   const [year, setYear] = useState(currentYear.toString());
   const [month, setMonth] = useState(currentMonth);
+  const [day, setDay] = useState(currentDay);
+  const [includeDay, setIncludeDay] = useState(false);
+  const [senderName, setSenderName] = useState("");
+  const [includeSender, setIncludeSender] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const prefix = `${year}_${month}_`;
+  // プレフィックスを動的に構築（プレビュー用）
+  const buildPrefix = (receiverName: string = "") => {
+    let prefix = "";
+    if (receiverName.trim()) {
+      prefix += `${receiverName.trim()}_`;
+    }
+    prefix += `${year}_${month}_`;
+    if (includeDay) {
+      prefix += `${day}_`;
+    }
+    if (includeSender && senderName.trim()) {
+      prefix += `${senderName.trim()}_`;
+    }
+    return prefix;
+  };
+
+  const prefix = buildPrefix();
 
   const years = Array.from({ length: 7 }, (_, i) => currentYear - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) =>
+    (i + 1).toString().padStart(2, "0")
+  );
+  const days = Array.from({ length: 31 }, (_, i) =>
     (i + 1).toString().padStart(2, "0")
   );
 
@@ -41,6 +66,7 @@ export default function Home() {
       original: file,
       newBaseName: getBaseName(file.name),
       extension: getExtension(file.name),
+      receiverName: "",
     }));
     setFiles((prev) => [...prev, ...fileItems]);
   }, []);
@@ -77,6 +103,14 @@ export default function Home() {
     );
   }, []);
 
+  const updateReceiverName = useCallback((index: number, newReceiverName: string) => {
+    setFiles((prev) =>
+      prev.map((file, i) =>
+        i === index ? { ...file, receiverName: newReceiverName } : file
+      )
+    );
+  }, []);
+
   const removeFile = useCallback((index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
@@ -101,27 +135,29 @@ export default function Home() {
 
     if (files.length === 1) {
       const file = files[0];
-      const newName = prefix + file.newBaseName + file.extension;
+      const filePrefix = buildPrefix(file.receiverName);
+      const newName = filePrefix + file.newBaseName + file.extension;
       downloadBlob(file.original, newName);
     } else {
       const zip = new JSZip();
       for (const file of files) {
-        const newName = prefix + file.newBaseName + file.extension;
+        const filePrefix = buildPrefix(file.receiverName);
+        const newName = filePrefix + file.newBaseName + file.extension;
         zip.file(newName, file.original);
       }
       const blob = await zip.generateAsync({ type: "blob" });
       downloadBlob(blob, `namer_${prefix}files.zip`);
     }
-  }, [files, prefix]);
+  }, [files, prefix, buildPrefix]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 p-5">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <h1 className="text-white text-center text-4xl font-bold mb-2">
           namer
         </h1>
         <p className="text-white/80 text-center mb-8">
-          ファイル名を YYYY_MM_ 形式で一括変換
+          ファイル名に日付プレフィックスを一括追加
         </p>
 
         <div className="bg-white rounded-2xl p-8 shadow-xl">
@@ -154,34 +190,94 @@ export default function Home() {
           />
 
           {/* Date Selector */}
-          <div className="flex gap-3 items-center mb-5 p-4 bg-gray-50 rounded-lg">
-            <label className="font-semibold text-gray-700">
-              日付プレフィックス:
-            </label>
-            <select
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
-            >
-              {years.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-            <span className="text-gray-900">年</span>
-            <select
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
-            >
-              {months.map((m) => (
-                <option key={m} value={m}>
-                  {parseInt(m)}
-                </option>
-              ))}
-            </select>
-            <span className="text-gray-900">月</span>
+          <div className="mb-5 p-4 bg-gray-50 rounded-lg space-y-3">
+            <div className="flex gap-3 items-center flex-wrap">
+              <label className="font-semibold text-gray-700">
+                日付プレフィックス:
+              </label>
+              <select
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+              <span className="text-gray-900">年</span>
+              <select
+                value={month}
+                onChange={(e) => setMonth(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+              >
+                {months.map((m) => (
+                  <option key={m} value={m}>
+                    {parseInt(m)}
+                  </option>
+                ))}
+              </select>
+              <span className="text-gray-900">月</span>
+            </div>
+
+            {/* 日のオプション */}
+            <div className="flex gap-3 items-center">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeDay}
+                  onChange={(e) => setIncludeDay(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                />
+                <span className="text-gray-700 font-medium">日を含める</span>
+              </label>
+              {includeDay && (
+                <>
+                  <select
+                    value={day}
+                    onChange={(e) => setDay(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900"
+                  >
+                    {days.map((d) => (
+                      <option key={d} value={d}>
+                        {parseInt(d)}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="text-gray-900">日</span>
+                </>
+              )}
+            </div>
+
+            {/* 送信者名のオプション */}
+            <div className="flex gap-3 items-center">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeSender}
+                  onChange={(e) => setIncludeSender(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                />
+                <span className="text-gray-700 font-medium">送信者名を含める</span>
+              </label>
+              {includeSender && (
+                <input
+                  type="text"
+                  value={senderName}
+                  onChange={(e) => setSenderName(e.target.value)}
+                  placeholder="送信者名を入力"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              )}
+            </div>
+
+            {/* プレビュー */}
+            <div className="pt-2 border-t border-gray-200">
+              <span className="text-gray-600 text-sm">プレビュー: </span>
+              <span className="text-indigo-600 font-bold">{prefix}</span>
+              <span className="text-gray-400">ファイル名.拡張子</span>
+            </div>
           </div>
 
           {/* File List */}
@@ -201,9 +297,19 @@ export default function Home() {
                     <div className="text-sm text-gray-500 mb-1">
                       元のファイル名: {file.original.name}
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 mb-2">
+                      <input
+                        type="text"
+                        value={file.receiverName}
+                        onChange={(e) => updateReceiverName(index, e.target.value)}
+                        className="w-32 px-3 py-2 border border-gray-300 rounded-md bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="受信者名"
+                      />
+                      {file.receiverName.trim() && (
+                        <span className="text-indigo-600 font-bold">_</span>
+                      )}
                       <span className="text-indigo-600 font-bold">
-                        {prefix}
+                        {buildPrefix("")}
                       </span>
                       <input
                         type="text"
